@@ -1,0 +1,13 @@
+<html>
+  <head>
+    {% if title %}
+    <title>{{title}} - testMap</title>
+    {% else %}
+    <title>testMap</title>
+    {% endif %}
+    <link rel= "stylesheet" type= "text/css" href= "{{ url_for('static',filename='map-style.css') }}">
+  </head>
+  <body>
+    {% block content %}{% endblock %}
+  </body>
+</html>

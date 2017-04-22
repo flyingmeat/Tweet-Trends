@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block content %}
+	<div id="floating-panel" class="floating">
+		<div>Search tweets</div>
+
+		<div class="dropdown">
+		  <button onclick="drop()" class="dropbtn" id="dropbtn">Select keyword</button>
+		  <div id="myDropdown" class="dropdown-content">
+		    <a href="#" class="word">I'm</a>
+		    <a href="#" class="word">on</a>
+		    <a href="#" class="word">photo</a>
+		    <a href="#" class="word">https</a>
+		    <a href="#" class="word">at</a>
+		    <a href="#" class="word">happy</a>
+		  </div>
+		</div>
+		<input type="text" id="keyword" value = "or input your keyword">
+		<button id="search">Search</button>
+	</div>
+	<div id="floating-emotion" class="floating-2">
+		<div>Search Emotion</div>
+
+		<div class="dropdown">
+		  <button onclick="drop2()" class="dropbtn" id="dropbtn">Select emotion</button>
+		  <div id="myDropdown-emotion" class="dropdown-content">
+		    <a href="#" class="emotion">Anger</a>
+		    <a href="#" class="emotion">Joy</a>
+		    <a href="#" class="emotion">Fear</a>
+		    <a href="#" class="emotion">Sadness</a>
+		    <a href="#" class="emotion">Disguest</a>
+		    <a href="#" class="emotion">Neutral</a>
+		  </div>
+		</div>
+	</div>
+	<div class="search-result">
+		<div>The number of results is:</div>
+		<div id="num-of-result"></div>
+		<button id="show-result">show</button>
+		<button id="remove-result">remove</button>
+		<button id="close-result">close</button>
+	</div>
+	<div class="search-range">
+		<div>search in range(*10km):</div>
+		<input type="text" id="range" size="5">
+		<button id="remove-range-result">remove</button>
+		<button id="click-map">search</button>
+		<div id="info"></div>
+	</div>
+	<div id = "map"></div>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.6/socket.io.min.js"></script>
+	<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA0lr9RuOwt8hQzPd-QnCl1rozyOtxZXjA&callback=initMap"
+	    async defer></script>
+	<script type="text/javascript" charset="utf-8">
+	// ---------------------drop down ------------------------------//
+		/* When the user clicks on the button, 
+		toggle between hiding and showing the dropdown content */
+		function drop() {
+		    $("#myDropdown").addClass("show-drop");
+		}
+
+		function drop2() {
+		    $("#myDropdown-emotion").addClass("show-drop");
+		}
+
+		// Close the dropdown menu if the user clicks outside of it
+		window.onclick = function(event) {
+		  if (!event.target.matches('.dropbtn')) {
+		    var dropdowns = document.getElementsByClassName("dropdown-content");
+		    var i;
+		    for (i = 0; i < dropdowns.length; i++) {
+		      var openDropdown = dropdowns[i];
+		      if (openDropdown.classList.contains('show-drop')) {
+		        openDropdown.classList.remove('show-drop');
+		      }
+		    }
+		  }
+		}
+		$(".word").click(function() {
+			$("#keyword").val($(this).text());
+		});
+
+		// -------------------------------------------------------------//
+		// --map -- //
+		var map;
+		function initMap() {
+		  map = new google.maps.Map(document.getElementById('map'), {
+		    center: {lat: 40.730610, lng: 0.935242},
+		    zoom: 2
+		  });
+		}
+		// -----------------socketio ------------------------------------//
+		// var socket = io.connect('http://' + document.domain + ':' + location.port);
+		var socket = io.connect('http://tweet-map-queue.5s7rp6pt32.us-west-2.elasticbeanstalk.com/test');
+		var red = [];
+		var blue = [];
+		var green = [];
+
+		$(".emotion").click(function() {
+			var emotion_word = $(this).text();
+			console.log(emotion_word);
+			socket.emit('search_emotion', {data: emotion_word})	
+		})
+
+		socket.on('connect', function() {
+			console.log('I\'m connected!');
+		});
+		socket.on('search_response', function(data) {
+			$("#num-of-result").text(data["data"].length);
+			$(".search-result").addClass("show-search");
+			blue = clearTag(blue);
+			data["data"].forEach(function(item) {
+				var marker = new google.maps.Marker({
+				    icon: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+				    animation: google.maps.Animation.DROP,
+				    position: {lat: item['_source']['coordinates'][1], lng: item['_source']['coordinates'][0]}
+				});
+				var tweet = item['_source']['text']
+				var infowindow = new google.maps.InfoWindow({
+					content: '<p>User: ' + item['_source']['user'] + '</p>' 
+						+ '<p>' + tweet + '</p>'
+						+ '<p>Emotion: ' + item['_source']['emotion'] + '</p>'
+				});
+				marker.addListener('click', function() {
+		    		infowindow.open(map, marker);
+				});
+				blue.push(marker);
+			});
+			console.log(data);
+			console.log(data["data"].length);
+		});
+		socket.on('response', function(data) {
+			console.log(data)
+		});
+		$("#search").click(function() {
+			var keyword = $("#keyword").val();
+			console.log(keyword);
+			socket.emit('search', {data: keyword});
+		});
+		$("#close-result").click(function() {
+			$(".search-result").removeClass("show-search");
+		});
+		$("#show-result").click(function() {
+			blue.forEach(function(item) {
+				item.setMap(map);
+			});
+		});
+		$("#remove-result").click(function() {
+			blue.forEach(function(item) {
+				item.setMap(null);
+			});
+		})
+		socket.on('my_response', function(data) {
+			console.log(data);
+			// console.log(data['position']['coordinates'])
+			if (red.length >= 50) {
+				var oldMaker = red.shift();
+				oldMaker.setMap(null);
+				console.log(red.length)
+			}
+			var marker = new google.maps.Marker({
+			    map: map,
+			    // draggable: true,
+			    animation: google.maps.Animation.DROP,
+			    position: {lat: data['position'][1], lng: data['position'][0]}
+			});
+			var tweet = data['text']
+			var infowindow = new google.maps.InfoWindow({
+				content: '<p>User: ' + data['user'] + '</p>' 
+						+ '<p>' + tweet + '</p>'
+						+ '<p>Emotion: ' + data['emotion'] + '</p>'
+			});
+			marker.addListener('click', function() {
+	    		infowindow.open(map, marker);
+			});
+			red.push(marker);
+		});
+		socket.on('range_search_response', function(data) {
+			console.log(data['data']);
+			$("#info").text("there are " + data['data'].length + " results");
+			data['data'].forEach(function(item) {
+				var marker = new google.maps.Marker({
+					icon: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png',
+				    map: map,
+				    // draggable: true,
+				    animation: google.maps.Animation.DROP,
+				    position: {lat: item['_source']['coordinates'][1], lng: item['_source']['coordinates'][0]}
+				});
+				var tweet = item['_source']['text']
+				var infowindow = new google.maps.InfoWindow({
+					content: '<p>User: ' + item['_source']['user'] + '</p>' 
+						+ '<p>' + tweet + '</p>'
+						+ '<p>Emotion: ' + item['_source']['emotion'] + '</p>'
+				});
+				marker.addListener('click', function() {
+		    		infowindow.open(map, marker);
+				});
+				green.push(marker);
+			});
+		});
+		// --------------------- range search ----------------------------//
+		$("#click-map").click(function() {
+			if ($("#range").val() == "") {
+				$("#info").text("Please provide the range you want to search within");
+			}
+			else {
+				$("#info").text("Please click on the map");
+				green = clearTag(green);
+				var handler = google.maps.event.addListener(map, "click", function (event) {
+				    var latitude = event.latLng.lat();
+				    var longitude = event.latLng.lng();
+				    var range = $("#range").val();
+				    console.log( latitude + ', ' + longitude );
+				    $("#info").text("");
+				    google.maps.event.removeListener(handler);
+				    socket.emit('range_search', {lat: latitude, lon: longitude, distance: range * 10});
+				});
+			}
+			
+		});
+		$("#remove-range-result").click(function() {
+			green = clearTag(green);
+			$("#info").text("");
+		});
+		function clearTag(tag_list) {
+			for (var i = 0; i < tag_list.length; i++) {
+				tag_list[i].setMap(null);
+			}
+			tag_list = [];
+			return tag_list;
+		}
+	</script>
+{% endblock %}
